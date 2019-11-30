@@ -8,7 +8,7 @@ from datetime import datetime
 from time import time
 from pathlib import Path #, PurePath
 from lxml import etree
-from io import StringIO, BytesIO
+from io import BytesIO
 import aiohttp, asyncio
 # from aiohttp import web
 
@@ -16,7 +16,7 @@ import aiohttp, asyncio
 pp = pprint.PrettyPrinter(indent=4)
 
 # Main parameters
-from config import Config
+from config.config import Config
 output_dir = Config.output_dir
 
 # main parameters
@@ -36,15 +36,18 @@ auth = Config.auth
 # custom parameters
 # s_terms = 'Farm Security Administration Photographs'
 # s_terms = 'still image manhattan street portrait 1960 photograph '
-s_terms = "Photographs"
-adv_s_terms = '&field=genre'
+# s_terms = "Photographs"
+# adv_s_terms = '&field=genre'
+s_terms = list(range(1970)[1960:1970])
+adv_s_terms = '&field=temporal'
 # coll_id = 'e5462600-c5d9-012f-a6a3-58d385a7bc34'  # Farm Security Administration Photographs
 # coll_id = 'a301da20-c52e-012f-cc55-58d385a7bc34'  # Photographic views of New York City, 1870's-1970's
 coll_id = '439afdd0-c62b-012f-66d1-58d385a7bc34'  # Detroit Publishing Company postcards
 
 # /!\ URLs
 coll_url = baseurl + 'collections/' + coll_id + '?' + pagin
-full_url = baseurl + 'items' + trail_url + s_terms + '&' + pagin + adv_s_terms
+full_url = baseurl + 'items' + trail_url + '&q=' + str(s_terms) + '&' + pagin + adv_s_terms + '&q='
+full_url_year = baseurl + 'items' + trail_url + '&' + pagin + adv_s_terms + '&q='
 item_url = baseurl + 'items/mods_captures/'  # item_details
 
 
@@ -134,28 +137,87 @@ async def fetch_all(urls, loop, mode):
         return results
 
 
-def fetch_pages():
-    page = 1
-    n_pages = 1
+def get_url(page, *term):
+    print(page, term)
+    if term:
+        page_url = full_url_year + str(term[0])
+    # page urls
+    if page > 1:
+        page_url = '{}&page={}'.format(full_url, str(page))
+    elif term and page == 1:
+        page_url = page_url
+    else:
+        page_url = full_url
+    # print(page_url)
+
+    # # prepare page numbers
+    # if page == 1:
+    #     data = requests.get(page_url, headers={'Authorization': auth}).json()['nyplAPI']
+    #     total_results = int(data['response']['numResults'])
+    #     n_pages = int(data['request']['totalPages'])
+
+    print(page_url)
+    return page_url
+
+
+def get_stats(page_url):
+    # prepare page numbers
+    data = requests.get(page_url, headers={'Authorization': auth}).json()['nyplAPI']
+    total_results = int(data['response']['numResults'])
+    n_pages = int(data['request']['totalPages'])
+    return total_results, n_pages
+
+
+def init_pages(page, n_pages, s_el):
     list_urls = list()
+    total_results = 0
     while page <= n_pages:
-
-        # page urls
-        if page > 1:
-            page_url = '{}&page={}'.format(full_url, str(page))
-        else:
-            page_url = full_url
-        # print(page_url)
-
-        # prepare page numbers
+        page_url = get_url(page, s_el)
         if page == 1:
-            data = requests.get(page_url, headers={'Authorization': auth}).json()['nyplAPI']
-            total_results = int(data['response']['numResults'])
-            n_pages = int(data['request']['totalPages'])
+            sts = get_stats(page_url)
+            total_results += sts[0]
+            n_pages = sts[0]
 
         # iterate to next page
         list_urls.append(page_url)
         page += 1
+    return list_urls, total_results, n_pages
+
+
+def fetch_pages():
+    page = 1
+    n_pages = 1
+    list_urls = list()
+
+
+    if type(s_terms) is list:
+        # pass
+        # # loop over years
+        print(s_terms)
+        for s_el in s_terms:
+            res = init_pages(page, n_pages, s_el)
+            list_urls = res[0]
+            total_results = res[1]
+            n_pages = res[2]
+            # n_pages = get_url(page, el)
+            #return list_urls, n_pages, total_results, s_el
+    else:
+        res = init_pages(page, n_pages)
+        list_urls = res[0]
+        total_results = res[1]
+        n_pages = res[2]
+        # n_pages = get_url(page, el)
+        # list_urls = init_pages(page, n_pages)
+        # while page <= n_pages:
+        #     page_url = get_url(page)
+        #     if page == 1:
+        #         sts = get_stats(page_url)
+        #         total_results = sts[0]
+        #         n_pages = sts[0]
+        #
+        #     # iterate to next page
+        #     list_urls.append(page_url)
+        #     page += 1
 
     return list_urls, n_pages, total_results
 
@@ -222,9 +284,11 @@ if __name__ == '__main__':
     page_urls = res_1[0]
     n_pages = res_1[1]
     total = res_1[2]
+    # if len(res_1) == 4:
+    #     s_terms = res_1[3]
 
     # logs
-    mes_res = '\n{:,}'.format(total) + " items retrieved from the search '" + s_terms + "'"
+    mes_res = '\n{:,}'.format(total) + " items retrieved from the search '{}'".format(s_terms)
     mes_pages = '\n{:,}'.format(n_pages) + " pages to fetch ..."
     print(mes_res, mes_pages)
     write_to_log(log_path, [mes_res, mes_pages])
