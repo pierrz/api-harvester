@@ -148,13 +148,6 @@ def get_url(page, *term):
         page_url = page_url
     else:
         page_url = full_url
-    # print(page_url)
-
-    # # prepare page numbers
-    # if page == 1:
-    #     data = requests.get(page_url, headers={'Authorization': auth}).json()['nyplAPI']
-    #     total_results = int(data['response']['numResults'])
-    #     n_pages = int(data['request']['totalPages'])
 
     print(page_url)
     return page_url
@@ -165,6 +158,7 @@ def get_stats(page_url):
     data = requests.get(page_url, headers={'Authorization': auth}).json()['nyplAPI']
     total_results = int(data['response']['numResults'])
     n_pages = int(data['request']['totalPages'])
+    print(total_results)
     return total_results, n_pages
 
 
@@ -178,6 +172,9 @@ def init_pages(page, n_pages, s_el):
             total_results += sts[0]
             n_pages = sts[0]
 
+            # if total_results == 0:
+            #     pass
+
         # iterate to next page
         list_urls.append(page_url)
         page += 1
@@ -188,24 +185,26 @@ def fetch_pages():
     page = 1
     n_pages = 1
     list_urls = list()
-
+    total_results = total_pages = 0
 
     if type(s_terms) is list:
         # pass
         # # loop over years
         print(s_terms)
         for s_el in s_terms:
+            print(s_el)
             res = init_pages(page, n_pages, s_el)
-            list_urls = res[0]
-            total_results = res[1]
+            list_urls += res[0]
+            total_results += res[1]
             n_pages = res[2]
+            total_pages += n_pages
             # n_pages = get_url(page, el)
             #return list_urls, n_pages, total_results, s_el
     else:
         res = init_pages(page, n_pages)
         list_urls = res[0]
         total_results = res[1]
-        n_pages = res[2]
+        total_pages = res[2]
         # n_pages = get_url(page, el)
         # list_urls = init_pages(page, n_pages)
         # while page <= n_pages:
@@ -219,7 +218,7 @@ def fetch_pages():
         #     list_urls.append(page_url)
         #     page += 1
 
-    return list_urls, n_pages, total_results
+    return list_urls, total_pages, total_results
 
 
 def get_items(page_dir, loop):
